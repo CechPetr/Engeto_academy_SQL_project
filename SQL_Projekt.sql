@@ -45,56 +45,9 @@ LEFT JOIN t_weather_rain AS twr
 	ON twdat.city = twr.city
 	AND twdat.day = twr.day;
 	
-#Religion share prep
-CREATE OR REPLACE TABLE t_religion_share_prep AS 
-SELECT
-r.country,
-MAX (CASE 
-	WHEN r.religion = 'Christianity' then r.population
-	END) AS Christianity,
-MAX (CASE 
-	WHEN r.religion = 'Islam' then r.population 
-	END) AS Islam,
-MAX (CASE 
-	WHEN r.religion = 'Unaffiliated religions' then r.population 
-	END) AS Unaffiliated_religions,
-MAX (CASE 
-	WHEN r.religion = 'Hinduism' then r.population 
-	END) AS Hinduism,
-MAX (CASE 
-	WHEN r.religion = 'Buddhism' then r.population 
-	END) AS Buddhism,
-MAX (CASE 
-	WHEN r.religion = 'Folk religions' then r.population 
-	END) AS Folk_religions,
-MAX (CASE 
-	WHEN r.religion = 'Other religions' then r.population 
-	END) AS Other_religions,
-MAX (CASE 
-	WHEN r.religion = 'Judaism' then r.population 
-	END) AS Judaism,
-tpp2.population AS country_total_population
-FROM religions AS r
-JOIN t_project_part_2 AS tpp2
-ON r.country = tpp2.country
-where r.`year` = '2020' and r.region = 'Europe' and r.population != '0'
-group by country;
-
-#Religion share
+#Population density, median age, religion
 CREATE OR REPLACE TABLE t_religion_share AS
-SELECT
-country,
-CAST (ROUND((Christianity/(country_total_population/100)),2) as float) AS Christianity_share,
-CAST (ROUND(Islam/(country_total_population/100),2) as float) AS Islam_share,
-CAST (ROUND(Unaffiliated_religions/(country_total_population/100),2) as float) AS Unaffiliated_religions_share,
-CAST (ROUND(Hinduism/(country_total_population/100),2) as float) AS Hinduism_share,
-CAST (ROUND(Buddhism/(country_total_population/100),2) as float) AS Buddhism_share,
-CAST (ROUND(Folk_religions/(country_total_population/100),2) as float) AS Folk_religions_share,
-CAST (ROUND(Other_religions/(country_total_population/100),2) as float) AS Other_religions_share,
-CAST (ROUND(Judaism/(country_total_population/100),2) as float) AS Judaism_share
-FROM t_religion_share_prep trsp;
 
-#Population density, median age
 CREATE OR REPLACE TABLE t_population_density_median_age AS
 SELECT
 	c.country,
@@ -107,6 +60,7 @@ JOIN religions AS r
 	ON c.country = r.country
 WHERE r.`year` = '2020'
 GROUP BY c.country;
+
 
 #Rozdíl mezi očekávanou dobou dožití
 CREATE OR REPLACE TABLE t_life_expectancy_diff AS
@@ -133,31 +87,25 @@ from economies
 where gini is not null
 GROUP BY country; 
 
-#Tabulka část 2
 CREATE OR REPLACE TABLE t_project_part_2 AS
 SELECT 
 tpdma.*,
 tled.life_expectancy_diff,
 tggcd.GDP_per_resident,
 tggcd.gini,
-tggcd.mortaliy_under5,
-trs.Christianity_share,
-trs.Islam_share,
-trs.Unaffiliated_religions_share,
-trs.Hinduism_share,
-trs.Buddhism_share,
-trs.Folk_religions_share,
-trs.Other_religions_share,
-trs.Judaism_share
+tggcd.mortaliy_under5
 FROM t_population_density_median_age AS tpdma 
 JOIN t_life_expectancy_diff AS tled
 	ON tpdma.country = tled.country
 JOIN t_GDP_GINY_CHL_deaths AS tggcd
-	ON tpdma.country = tggcd.country
-JOIN t_religion_share AS trs 
-ON tpdma.country = trs.country;
+	ON tpdma.country = tggcd.country;
+	
+	
+SELECT 
+*
+from religions r
+where (year = '2020' and region = 'Europe') and population != 0;
 
-
-
-
+	
+	
 	
