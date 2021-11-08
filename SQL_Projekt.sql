@@ -20,7 +20,7 @@ where `city` is not NULL
 group by `city`,`day`;
 
 #Počet hodin kdy byly srážky nenulové
-CREATE OR REPLACE TABLE `t_weather_rain` AS
+CREATE OR REPLACE TABLE t_weather_rain_prep AS
 SELECT 
 	`city`,
 	COUNT(`rain`) AS `hours_of_rain`, 
@@ -28,6 +28,13 @@ SELECT
 FROM `weather` w
 WHERE `rain` > '0.0 mm' and `city` is not NULL
 group by `city`, `day`;
+
+CREATE OR REPLACE TABLE t_weather_rain AS
+SELECT 
+	city,
+	(hours_of_rain * 3) as hours_of_rain, 
+	`day` 
+FROM t_weather_rain_prep;
 
 #Tabulka část 3
 CREATE OR REPLACE TABLE t_project_part_3 AS
@@ -44,7 +51,52 @@ JOIN t_weather_max_gust AS twmg
 LEFT JOIN t_weather_rain AS twr
 	ON twdat.city = twr.city
 	AND twdat.day = twr.day;
-	
+
+#Spojovací tabulka města
+CREATE OR REPLACE TABLE t_city_alias_table (
+	City text(255),
+	City_alias text(255)
+);
+
+#Hodnoty tabulky
+INSERT INTO t_city_alias_table (City, City_alias)
+	VALUES ('Amsterdam', 'Amsterdam'),
+	('Athens', 'Athenai'),
+	('Belgrade', 'Belgrade'),
+	('Berlin', 'Berlin'),
+	('Bern', 'Bern'),
+	('Bratislava', 'Bratislava'),
+	('Brussels', 'Bruxelles [Brussel]'),
+	('Bucharest', 'Bucuresti'),
+	('Budapest', 'Budapest'),
+	('Chisinau', 'Chisinau'),
+	('Copenhagen', 'Copenhagen'),
+	('Dublin', 'Dublin'),
+	('Helsinki', 'Helsinki [Helsingfors]'),
+	('Kiev', 'Kyiv'),
+	('Lisbon', 'Lisboa'),
+	('Ljubljana', 'Ljubljana'),
+	('London', 'London'),
+	('Luxembourg', 'Luxembourg [Luxemburg/L'),
+	('Madrid', 'Madrid'),
+	('Minsk', 'Minsk'),
+	('Moscow', 'Moscow'),
+	('Oslo', 'Oslo'),
+	('Paris', 'Paris'),
+	('Prague', 'Praha'),
+	('Riga', 'Riga'),
+	('Rome', 'Roma'),
+	('Skopje', 'Skopje'),
+	('Sofia', 'Sofia'),
+	('Stockholm', 'Stockholm'),
+	('Tallinn', 'Tallinn'),
+	('Tirana', 'Tirana'),
+	('Vienna', 'Wien'),
+	('Vilnius', 'Vilnius'),
+	('Warsaw', 'Warszawa');
+
+ALTER TABLE t_city_alias_table CONVERT TO CHARACTER SET utf8mb4 COLLATE 'utf8mb4_general_ci';
+
 #Religion share prep
 CREATE OR REPLACE TABLE t_religion_share_prep AS 
 SELECT
@@ -157,7 +209,139 @@ JOIN t_GDP_GINY_CHL_deaths AS tggcd
 JOIN t_religion_share AS trs 
 ON tpdma.country = trs.country;
 
+#Dny v tydnu, roční období
+CREATE OR REPLACE TABLE t_day_of_week_seasons AS
+SELECT 
+`date`,
+country,
+confirmed,
+CASE
+	when
+	DAYOFWEEK(`date`) in ("2", "3", "4", "5", "6") then 1
+	else 0 
+	end den_v_tydnu,
+CASE 
+	WHEN date BETWEEN '2019-12-21' and '2020-03-19' then 3
+	WHEN date between '2020-03-20' and '2020-06-19' then 0
+	WHEN date BETWEEN '2020-06-20' and '2020-09-21' then 1
+	WHEN date BETWEEN '2020-09-22' and '2020-12-20' then 2
+	WHEN date BETWEEN '2020-12-21' and '2021-03-19' then 3
+	WHEN date between '2021-03-20' and '2021-06-19' then 0
+	END as rocni_obdobi
+from covid19_basic_differences cbd;
+
+#Počet provedených testů
+CREATE OR REPLACE TABLE t_covid_tests AS
+SELECT 
+country,
+`date`,
+tests_performed
+FROM covid19_tests ct;
+#Spojovací tabulka země
+CREATE OR REPLACE TABLE t_country_alias_table (
+	Country text(255),
+	Country_alias text(255)
+);
+
+#Hodnoty tabulky
+INSERT INTO t_country_alias_table (Country, Country_alias)
+	VALUES ('Albania', 'Albania'),
+	('Austria', 'Austria'),
+	('Belarus', 'Belarus'),
+	('Belgium', 'Belgium'),
+	('Bulgaria', 'Bulgaria'),
+	('Czech republic', 'Czechia'),
+	('Denmark', 'Denmark'),
+	('Estonia', 'Estonia'),
+	('Finland', 'Finland'),
+	('France', 'France'),
+	('Germany', 'Germany'),
+	('Greece', 'Greece'),
+	('Hungary', 'Hungary'),
+	('Ireland', 'Ireland'),
+	('Italy', 'Italy'),
+	('Latvia', 'Latvia'),
+	('Lithuania', 'Lithuania'),
+	('Luxembourg', 'Luxembourg'),
+	('Moldova', 'Moldova'),
+	('Netherlands', 'Netherlands'),
+	('North Macedonia', 'North Macedonia'),
+	('Norway', 'Norway'),
+	('Poland', 'Poland'),
+	('Portugal', 'Portugal'),
+	('Romania', 'Romania'),
+	('Russian Federation', 'Russia'),
+	('Serbia', 'Serbia'),
+	('Slovakia', 'Slovakia'),
+	('Slovenia', 'Slovenia'),
+	('Spain', 'Spain'),
+	('Sweden', 'Sweden'),
+	('Switzerland', 'Switzerland'),
+	('Ukraine', 'Ukraine'),
+	('United Kingdom', 'United Kingdom');
+
+ALTER TABLE t_country_alias_table CONVERT TO CHARACTER SET utf8mb4 COLLATE 'utf8mb4_general_ci';
+
+#Tabluka část 1
+CREATE OR REPLACE TABLE t_project_part_1 AS
+SELECT
+tdows.*,
+tct.tests_performed
+FROM t_day_of_week_seasons AS tdows 
+JOIN t_country_alias_table AS tcat 
+ON tdows.country = tcat.Country_alias
+LEFT JOIN t_covid_tests AS tct
+ON tct.country = tcat.Country 
+AND tdows.`date` = tct.`date`;
+
+#Spojení tabulek 2,3
+CREATE OR REPLACE TABLE t_spojeni_2_3 AS
+SELECT
+tpp2.*,
+tpp3.`day` ,
+tpp3.avg_temp ,
+tpp3.max_gust,
+tpp3.hours_of_rain 
+FROM t_project_part_2 AS tpp2
+JOIN t_city_alias_table AS tcat 
+	ON tpp2.capital_city = tcat.City_alias
+JOIN t_project_part_3 AS tpp3
+	ON tcat.City = tpp3.city
+group by tpp2.country, tpp3.day;
+
+#Spojeni tabulek 1,2,3
+CREATE OR REPLACE TABLE t_petr_cech_projekt_SQL_final AS
+SELECT
+tpp1.country,
+tpp1.`date`,
+tpp1.confirmed,
+tpp1.tests_performed,
+ts.population,
+tpp1.den_v_tydnu,
+tpp1.rocni_obdobi,
+ts.population_density,
+ts.GDP_per_resident,
+ts.gini,
+ts.mortaliy_under5,
+ts.median_age_2018,
+ts.Christianity_share,
+ts.Islam_share,
+ts.Unaffiliated_religions_share,
+ts.Hinduism_share,
+ts.Buddhism_share,
+ts.Folk_religions_share,
+ts.Other_religions_share,
+ts.Judaism_share,
+ts.life_expectancy_diff,
+ts.avg_temp,
+ts.hours_of_rain,
+ts.max_gust
+FROM t_project_part_1 AS tpp1
+JOIN t_country_alias_table AS tcat
+	ON tpp1.country = tcat.Country_alias
+JOIN t_spojeni_2_3 AS ts 
+	ON ts.country = tcat.Country
+	AND tpp1.`date` = ts.`day`
+order by tpp1.country, tpp1.`date`;
 
 
-
-	
